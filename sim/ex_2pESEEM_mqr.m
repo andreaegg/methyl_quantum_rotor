@@ -262,6 +262,7 @@ if Sys.Inum > 0
         uvec(k,:) = (Sys.Scoord-Sys.Icoord(k,:))/distance;                 % unit vector
         wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
     end
+    fprint(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
 end
 
 % Generate spin operators %
