@@ -16,7 +16,7 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr(Sys,Exp,Opt)
 % Sys - struct with fields specifing spin system
 %       .g           g-value of observed e-spin
 %                    default: 2.000
-%       .Scoord        coordinates of observed e-spin [x y z]
+%       .Scoord      coordinates of observed e-spin [x y z]
 %                    default: [0 0 0]
 %       .ws          e-spin resonance off-set [MHz]
 %                    default: 0
@@ -24,12 +24,14 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr(Sys,Exp,Opt)
 %                    default = 0
 %       .Itype       I nucleus e.g. "1H","14N" in a cell
 %                    --> MQR should be considered protons must be written in positions 1,2,3
+%       .HFiso       isotropic HF contribution [MHz] (rows = Aiso , column = nucleus)
+%                    default = 0
 %       .Icoord      coordinates of nuclear spin(s) (rows = nucleus, columns = [x y z])
 %                    --> MQR should be considered protons must be written in positions 1,2,3
 %       .methyl      1 if a methyl group is in close proximity of e-spin
 %                    default = 0
 %       .vt          methyl quantum rotor tunnel frequency [MHz]
-%                    default: 0.1
+%                    default: 1.2
 %
 % Exp - struct with fields specifing the experimental parameters
 %       .mwfrq       microwave frequency [GHz]
@@ -37,7 +39,7 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr(Sys,Exp,Opt)
 %       .B0          magnetic field [T]
 %                    default: 1.224 (= Q-Band)
 %       .tau         first interpulse delay [us]
-%                    default: 0.4
+%                    default: 0.120
 %       .dt          time increment [us]
 %                    default: 0.012
 %       .T           starting value for second interpulse delay
@@ -124,14 +126,23 @@ if Sys.Inum > 0
     else
         error('Information on I coordinates must be passed by variable Sys.Icoord in as a matrix (rows = nucleus, columns = [x y z])')
     end
+    if isfield(Sys,'HFiso')
+        if length(Sys.HFiso) ~= Sys.Inum
+            error('# I spins must all get information on isotropic HF interaction.')
+        end
+    end
+    if ~isfield(Sys,'HFiso')
+        Sys.HFiso = zeros(1,Sys.Inum);
+    end
 else
     Sys.Itype  = [];
     Sys.Icoord = [];
+    Sys.HFiso  = [];
 end
 
 if Sys.methyl == 1
     if ~isfield(Sys,'vt')
-        Sys.vt = 0.1;
+        Sys.vt = 1.2;
     else
         validateattributes(Sys.vt,{'numeric'},{'nonnegative','scalar'})
     end
@@ -143,7 +154,7 @@ end
 if ~exist('Exp','var')
     Exp.mwfrq   = 35;
     Exp.B0      = 1.224;
-    Exp.tau     = 0.4;
+    Exp.tau     = 0.120;
     Exp.dt      = 0.012;
     Exp.T       = 0.012;
     Exp.npoints = 1024;
@@ -167,7 +178,7 @@ else
         Exp.mwfrq = Exp.B0*Sys.g*bmagn/(planck*1e9);
     end
     if ~isfield(Exp,'tau')
-        Exp.tau = 0.4;
+        Exp.tau = 0.120;
     else
         validateattributes(Exp.tau,{'numeric'},{'nonnegative','scalar'})
     end
@@ -216,7 +227,7 @@ end
 if ~exist('Opt','var')
     Opt.knots = 31;
     Opt.apodization = 'dolph-chebyshev';
-    Opt.zerofilling = 1;
+    Opt.zerofilling = Exp.npoints;
 else
     if ~isfield(Opt,'knots')
         Opt.knots = 31;
@@ -231,19 +242,17 @@ else
         validatestring(Opt.apodization,allowedInputs);
     end
     if ~isfield(Opt,'zerofilling')
-        Opt.zerofilling = 1;
+        Opt.zerofilling = Exp.npoints;
     else
         validateattributes(Opt.zerofilling,{'numeric'},{'nonnegative','scalar'})
-        Opt.zerofilling = 2^Opt.zerofilling*Exp.npoints;
     end
 end
-
 
 % Initialize output vectors %
 % ------------------------- %
 
 npoints = Exp.npoints;
-t = linspace(Exp.tau,(Exp.npoints-1)*Exp.dt,Exp.npoints);
+t = linspace(0,(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
 spectrum = zeros(1,Opt.zerofilling);
 
@@ -260,7 +269,7 @@ if Sys.Inum > 0
         wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % [MHz]
         distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
         r(k)      = distance;                                              % [Å]
-        uvec(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;                 % unit vector
+        uvec(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
         wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
     end
     fprintf(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
@@ -315,7 +324,7 @@ end
 hamstart = Sys.ws*sz;
 
 if Sys.methyl == 1
-    if length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])
+    if (length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])) || (length(find(Sys.Itype == "2H")) >= 3 && isequal(find(Sys.Itype == "2H"),[1 2 3]))
         et   = sop(1,'e');
         sx   = kron(et,sx);
         sy   = kron(et,sy);
@@ -352,10 +361,9 @@ for ori = 1:nori
         for k = 1:Sys.Inum
             unitvec = uvec(k,:);
             ct  = sum(cvec.*unitvec);
-            a   = (3*ct^2-1)*wdd(k);
+            a   = (3*ct^2-1)*wdd(k) + Sys.HFiso(k);
             b   = 3*ct*sqrt(1-ct^2)*wdd(k);
             A(k) = a;
-            B(k) = b;
             ham = ham + wI(k)*iz{k} + a*sziz{k} + b*szix{k};
         end
         if Sys.methyl == 1
@@ -383,7 +391,7 @@ for ori = 1:nori
     
     % Generation of propagators
     for m = 1:length(p_pc)
-        upi2{m} = expm(-1i*2*pi*(ham+p_pc{m}*Exp.tpi2));
+        upi2{m} = expm(-1i*2*pi*(ham+p_pc{m})*Exp.tpi2);
     end
     
     utau = expm(-1i*2*pi*ham*Exp.tau);

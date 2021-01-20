@@ -16,16 +16,18 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr(Sys,Exp,Opt)
 % Sys - struct with fields specifing spin system
 %       .g           g-value of observed e-spin
 %                    default: 2.000
-%       .Scoord        coordinates of observed e-spin [x y z]
+%       .Scoord      coordinates of observed e-spin [x y z]
 %                    default: [0 0 0]
 %       .ws          e-spin resonance off-set [MHz]
 %                    default: 0
 %       .Inum        number of nuclear spin(s)
 %                    default = 0
 %       .Itype       I nucleus e.g. "1H","14N" in a cell
-%                    --> MQR should be considered protons must be written in positions 1,2,3
+%                    --> if MQR should be considered protons must be written in positions 1,2,3
 %       .Icoord      coordinates of nuclear spin(s) (rows = nucleus, columns = [x y z])
-%                    --> MQR should be considered protons must be written in positions 1,2,3
+%                    --> if MQR should be considered protons must be written in positions 1,2,3
+%       .HFiso       isotropic HF contribution [MHz] (rows = Aiso , column = nucleus)
+%                    default = 0
 %       .methyl      1 if a methyl group is in close proximity of e-spin
 %                    default = 0
 %       .vt          methyl quantum rotor tunnel frequency [MHz]
@@ -37,7 +39,7 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr(Sys,Exp,Opt)
 %       .B0          magnetic field [T]
 %                    default: 1.224 (= Q-Band)
 %       .tau         initial interpulse delay [us]
-%                    default: 0.4
+%                    default: 0.120
 %       .dt          time increment [us]
 %                    default: 0.012
 %       .npoints     number of points of time-domain signal
@@ -55,7 +57,7 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr(Sys,Exp,Opt)
 %       .knots       number of orientations on a meridian for with spectrum is simulated
 %                    default: 31
 %       .zerofilling dimension of zerofilling for DFT
-%                    default: 1
+%                    default: Exp.npoints
 %       .apodization apodization window for fourier transformation (see dft_ctav.m)
 %                    default: 'dolph-chebyshev'
 
@@ -123,14 +125,23 @@ if Sys.Inum > 0
     else
         error('Information on I coordinates must be passed by variable Sys.Icoord in as a matrix (rows = nucleus, columns = [x y z])')
     end
+    if isfield(Sys,'HFiso')
+        if length(Sys.HFiso) ~= Sys.Inum
+            error('# I spins must all get information on isotropic HF interaction.')
+        end
+    end
+    if ~isfield(Sys,'HFiso')
+        Sys.HFiso = zeros(1,Sys.Inum);
+    end
 else
     Sys.Itype  = [];
     Sys.Icoord = [];
+    Sys.HFiso  = [];
 end
 
 if Sys.methyl == 1
     if ~isfield(Sys,'vt')
-        Sys.vt = 0.1;
+        Sys.vt = 1.2;
     else
         validateattributes(Sys.vt,{'numeric'},{'nonnegative','scalar'})
     end
@@ -142,7 +153,7 @@ end
 if ~exist('Exp','var')
     Exp.mwfrq   = 35;
     Exp.B0      = 1.224;
-    Exp.tau     = 0.4;
+    Exp.tau     = 0.120;
     Exp.dt      = 0.012;
     Exp.npoints = 1024;
     Exp.tpi2    = 0.012;
@@ -166,7 +177,7 @@ else
         Exp.mwfrq = Exp.B0*Sys.g*bmagn/(planck*1e9);
     end
     if ~isfield(Exp,'tau')
-        Exp.tau = 0.4;
+        Exp.tau = 0.120;
     else
         validateattributes(Exp.tau,{'numeric'},{'nonnegative','scalar'})
     end
@@ -215,7 +226,7 @@ end
 if ~exist('Opt','var')
     Opt.knots = 31;
     Opt.apodization = 'dolph-chebyshev';
-    Opt.zerofilling = 1;
+    Opt.zerofilling = Exp.npoints;
 else
     if ~isfield(Opt,'knots')
         Opt.knots = 31;
@@ -225,15 +236,14 @@ else
     if ~isfield(Opt,'apodization')
         Opt.apodization = 'dolph-chebyshev';
     else
-        validateattributes(Opt.apodization,{'string'},{'nonempty'})
+        validateattributes(Opt.apodization,{'char'},{'nonempty'})
         allowedInputs = {'none','hamming','dolph-chebyshev','kaiser','lorentz-gauss','sinebell'};
         validatestring(Opt.apodization,allowedInputs);
     end
     if ~isfield(Opt,'zerofilling')
-        Opt.zerofilling = 1;
+        Opt.zerofilling = Exp.npoints;
     else
         validateattributes(Opt.zerofilling,{'numeric'},{'nonnegative','scalar'})
-        Opt.zerofilling = 2^Opt.zerofilling;
     end
 end
 
@@ -244,7 +254,12 @@ end
 npoints = Exp.npoints;
 t = linspace(Exp.tau,(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
-spectrum = zeros(1,Exp.npoints*2^Opt.zerofilling);
+if Opt.zerofilling == Exp.npoints
+    spectrum = zeros(1,2*Exp.npoints);
+else
+    spectrum = zeros(1,Opt.zerofilling);
+end
+
 
 % Calculate constants, frequencies, distances and anisotropic HF coupling %
 % ----------------------------------------------------------------------- %
@@ -256,13 +271,13 @@ if Sys.Inum > 0
         I(k)      = nucdata(Sys.Itype{k});
         gyro      = nucgval(Sys.Itype{k})*nmagn/hbar;
         yi(k)     = gyro/2/pi/1e6;                                         % [MHz T^-1]
-        wI(k)     = -gyro*Exp.B0;                                          % [MHz]
-        distance  = norm(Sys.Scoord - Sys.Icoord(k,:));
+        wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % [MHz]
+        distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
         r(k)      = distance;                                              % [Å]
-        uvec(k,:) = (Sys.Scoord-Sys.Icoord(k,:))/distance;                 % unit vector
+        uvec(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
         wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
     end
-    fprint(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
+    fprintf(1,'The S-H distances are : %4.1f, %4.1f, %4.1f A\n',r(1:3))
 end
 
 % Generate spin operators %
@@ -314,7 +329,7 @@ end
 hamstart = Sys.ws*sz;
 
 if Sys.methyl == 1
-    if length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])
+    if (length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])) || (length(find(Sys.Itype == "2H")) >= 3 && isequal(find(Sys.Itype == "2H"),[1 2 3]))
         et   = sop(1,'e');
         sx   = kron(et,sx);
         sy   = kron(et,sy);
@@ -341,21 +356,20 @@ end
 nori = length(weights); % number of orientations
 
 for ori = 1:nori
-
+    
     % Prepare Hamiltonian for the different cases %
     % ------------------------------------------- %
-    
+    ham = hamstart;
     if Sys.Inum > 0
         % calculate couplings
         cvec = vecs(:,ori)';
         for k = 1:Sys.Inum
             unitvec = uvec(k,:);
             ct  = sum(cvec.*unitvec);
-            a   = (3*ct^2-1)*wdd(k);
+            a   = (3*ct^2-1)*wdd(k) + Sys.HFiso(k);
             b   = 3*ct*sqrt(1-ct^2)*wdd(k);
             A(k) = a;
-            B(k) = b;
-            ham = hamstart + wI(k)*iz{k} + a*sziz{k} + b*szix{k};
+            ham = ham + wI(k)*iz{k} + a*sziz{k} + b*szix{k};
         end
         if Sys.methyl == 1
             a = A(1:3);
@@ -369,9 +383,6 @@ for ori = 1:nori
             ham0(2*n+1:3*n,2*n+1:3*n) = hamr3;
             ham = ham0 + 2/3*Sys.vt*to;
         end
-        
-    else
-        ham = hamstart;
     end
     
     % Apply pulse sequence including phase cycle %
@@ -387,29 +398,29 @@ for ori = 1:nori
     
     % Generation of propagators
     for m = 1:length(p1_pc)
-        upi2{m} = expm(-1i*2*pi*(ham+p1_pc{m}*Exp.tpi2));
+        upi2{m} = expm(-1i*2*pi*(ham+p1_pc{m})*Exp.tpi2);
     end
     
     for m = 1:length(p2_pc)
-        upi{m} = expm(-1i*2*pi*(ham+p2_pc{m}*Exp.tpi));
+        upi{m} = expm(-1i*2*pi*(ham+p2_pc{m})*Exp.tpi);
     end
     utau = expm(-1i*2*pi*ham*Exp.tau);
     
     % Propagation trough pulse sequence pi/2 - tau(+dt) - pi - tau(+dt) - det
+    
+    sig = propagation_pc(sig0,upi2,Exp.addphase);
+    sig = utau*sig*utau';
     for p = 1:npoints
-        sig = propagation_pc(sig0,upi2,Exp.addphase);
-        sig = utau*sig*utau';
-        sig = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        sig = propagation_pc(sig,upi,[]);
-        sig = utau*sig*utau';
-        sig = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        csignal(p) = trace(sm*sig);
+        sigtmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
+        sigtmp = propagation_pc(sigtmp,upi,[]);
+        sigtmp = utau*sigtmp*utau';
+        sigtmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sigtmp*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
+        csignal(p) = trace(sm*sigtmp);
     end
     signal  = signal + weights(ori)*csignal;
     csignal = csignal - mean(real(csignal)) - 1i*mean(imag(csignal));
     [frq,cspectrum] = dft_ctav(t,csignal,Opt);
     spectrum = spectrum + weights(ori)*cspectrum;
-
 end
 
 spectrum = spectrum/sum(weights);
