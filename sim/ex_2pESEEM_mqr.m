@@ -411,11 +411,11 @@ for ori = 1:nori
     sig = propagation_pc(sig0,upi2,Exp.addphase);
     sig = utau*sig*utau';
     for p = 1:npoints
-        sigtmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        sigtmp = propagation_pc(sigtmp,upi,[]);
-        sigtmp = utau*sigtmp*utau';
-        sigtmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sigtmp*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        csignal(p) = trace(sm*sigtmp);
+        sig_tmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
+        sig_tmp = propagation_pc(sig_tmp,upi,[]);
+        sig_tmp = utau*sig_tmp*utau';
+        sig_tmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig_tmp*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
+        csignal(p) = trace(sm*sig_tmp);
     end
     signal  = signal + weights(ori)*csignal;
     csignal = csignal - mean(real(csignal)) - 1i*mean(imag(csignal));

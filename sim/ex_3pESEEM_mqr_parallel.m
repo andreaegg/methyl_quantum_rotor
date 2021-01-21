@@ -343,6 +343,8 @@ if Sys.methyl == 1
     else
         error('Methyl quantum rotor effect can only be taken into account when a methyl group is present in structure, i.e. at least 3 1H required.)');
     end
+else
+    to = [];
 end
 
 % Simulation loop over a set of magnetic field orientations %
@@ -374,8 +376,6 @@ parfor ori = 1:nori
                     addhamr2 = addhamr2 + a*sziz{helpvec(k+2)};
                     addhamr3 = addhamr3 + a*sziz{helpvec(k+1)};
                 end
-            else
-                to = [];
             end
         end
         if Sys.methyl == 1
