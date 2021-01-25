@@ -252,9 +252,13 @@ end
 % ------------------------- %
 
 npoints = Exp.npoints;
-t = linspace(0,(Exp.npoints-1)*Exp.dt,Exp.npoints);
+t = linspace(Exp.T,(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
-spectrum = zeros(1,Opt.zerofilling);
+if Opt.zerofilling == Exp.npoints
+    spectrum = zeros(1,2*Exp.npoints);
+else
+    spectrum = zeros(1,Opt.zerofilling);
+end
 
 % Calculate constants, frequencies, distances and anisotropic HF coupling %
 % ----------------------------------------------------------------------- %
@@ -333,12 +337,12 @@ if Sys.methyl == 1
         sig0 = -sz;
         to   = zeros(size(sm));
         for k = 1:2*n
-            to(k,k+n) = 1/2;
-            to(k+n,k) = 1/2;
+            to(k,k+n) = -1;
+            to(k+n,k) = -1;
         end
         for k = 1:n
-            to(k,k+2*n) = 1/2;
-            to(k+2*n,k) = 1/2;
+            to(k,k+2*n) = -1;
+            to(k+2*n,k) = -1;
         end
     else
         error('Methyl quantum rotor effect can only be taken into account when a methyl group is present in structure, i.e. at least 3 1H required.)');
@@ -386,7 +390,7 @@ parfor ori = 1:nori
             ham0(1:n,1:n) = hamr1;
             ham0(n+1:2*n,n+1:2*n) = hamr2;
             ham0(2*n+1:3*n,2*n+1:3*n) = hamr3;
-            ham = ham0 + 2/3*Sys.vt*to;
+            ham = ham0 + (1/3)*Sys.vt*to;
         end
     end
     

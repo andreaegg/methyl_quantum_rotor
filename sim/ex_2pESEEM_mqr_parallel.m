@@ -1,7 +1,5 @@
 function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_parallel(Sys,Exp,Opt)
 
-
-
 % 2pESEEM simulation script
 %
 % takes the following interactions into account:
@@ -199,7 +197,7 @@ else
         validateattributes(Exp.tpi2,{'numeric'},{'nonnegative','scalar'})
     end
     if ~isfield(Exp,'tpi')
-        Exp.tpi = 0.012;
+        Exp.tpi = 0.024;
     else
         validateattributes(Exp.tpi,{'numeric'},{'nonnegative','scalar'})
     end
@@ -254,7 +252,7 @@ end
 % ------------------------- %
 
 npoints = Exp.npoints;
-t = linspace(Exp.tau,(Exp.npoints-1)*Exp.dt,Exp.npoints);
+t = linspace(2*Exp.tau,2*Exp.tau +2*(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
 if Opt.zerofilling == Exp.npoints
     spectrum = zeros(1,2*Exp.npoints);
@@ -274,11 +272,11 @@ if Sys.Inum > 0
         yi(k)     = gyro/2/pi/1e6;                                         % [MHz T^-1]
         wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % [MHz]
         distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
-        r(k)      = distance;                                              % [Å]
-        uvec(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
+        r(k)      = distance;                                          % [Å]
+        uvec(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;           % unit vector
         wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
     end
-    fprintf(1,'The S-H distances are : %4.1f, %4.1f, %4.1f A\n',r(1:3))
+    fprintf(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
 end
 
 % Generate spin operators %
@@ -339,12 +337,12 @@ if Sys.methyl == 1
         sig0 = -sz;
         to   = zeros(size(sm));
         for k = 1:2*n
-            to(k,k+n) = 1/2;
-            to(k+n,k) = 1/2;
+            to(k,k+n) = -1;
+            to(k+n,k) = -1;
         end
         for k = 1:n
-            to(k,k+2*n) = 1/2;
-            to(k+2*n,k) = 1/2;
+            to(k,k+2*n) = -1;
+            to(k+2*n,k) = -1;
         end
     else
         error('Methyl quantum rotor effect can only be taken into account when a methyl group is present in structure, i.e. at least 3 1H required.)');
@@ -363,10 +361,10 @@ parfor ori = 1:nori
     % Prepare Hamiltonian for the different cases %
     % ------------------------------------------- %
     ham = hamstart;
-    sub = zeros(size(sziz{1}));
-    addhamr2 = zeros(size(sziz{1}));
-    addhamr3 = zeros(size(sziz{1}));
     if Sys.Inum > 0
+        sub = zeros(size(sziz{1}));
+        addhamr2 = zeros(size(sziz{1}));
+        addhamr3 = zeros(size(sziz{1}));
         % calculate couplings
         cvec = vecs(:,ori)';
         for k = 1:Sys.Inum
@@ -378,9 +376,9 @@ parfor ori = 1:nori
             if Sys.methyl == 1
                 helpvec = repmat([1 2 3],1,2);
                 if k <= 3
-                    sub  = sub + a*sziz{k};
-                    addhamr2 = addhamr2 + a*sziz{helpvec(k+2)};
-                    addhamr3 = addhamr3 + a*sziz{helpvec(k+1)};
+                    sub  = sub + a*sziz{k} + b*szix{k};
+                    addhamr2 = addhamr2 + a*sziz{helpvec(k+2)} + b*szix{helpvec(k+2)};
+                    addhamr3 = addhamr3 + a*sziz{helpvec(k+1)} + b*szix{helpvec(k+1)};
                 end
             end
         end
@@ -392,7 +390,7 @@ parfor ori = 1:nori
             ham0(1:n,1:n) = hamr1;
             ham0(n+1:2*n,n+1:2*n) = hamr2;
             ham0(2*n+1:3*n,2*n+1:3*n) = hamr3;
-            ham = ham0 + 2/3*Sys.vt*to;
+            ham = ham0 + (1/3)*Sys.vt*to;
         end
     end
     
@@ -411,17 +409,19 @@ parfor ori = 1:nori
     upi2 = gen_propagators(ham,Exp.tpi2,p1_pc);
     upi  = gen_propagators(ham,Exp.tpi,p2_pc);
     utau = expm(-1i*2*pi*ham*Exp.tau);
+    udt  = expm(-1i*2*pi*ham*Exp.dt);
     
     % Propagation trough pulse sequence pi/2 - tau(+dt) - pi - tau(+dt) - det
-    sig = propagation_pc(sig0,upi2,Exp.addphase);
-    sig = utau*sig*utau';
+    sig = propagation_pc(sig0,upi2,Exp.addphase);                       % pi/2 pulse
+    sig = utau*sig*utau';                                               % tau1
     for p = 1:npoints
-        sigtmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        sigtmp = propagation_pc(sigtmp,upi,[]);
-        sigtmp = utau*sigtmp*utau';
-        sigtmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sigtmp*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        csignal(p) = trace(sm*sigtmp);
+        sig_tmp = propagation_pc(sig,upi,[]);                           % pi pulse
+        sig_tmp = utau*sig_tmp*utau';                                   % tau2
+        sig_tmp = (udt^(p-1))*sig_tmp*(udt^(p-1))';                     % + dt (tau2)
+        csignal(p) = trace(sm*sig_tmp);                                 % det
+        sig = udt*sig*udt';                                             % +dt (tau1)
     end
+    
     signal  = signal + weights(ori)*csignal;
     csignal = csignal - mean(real(csignal)) - 1i*mean(imag(csignal));
     [cfrq,cspectrum] = dft_ctav(t,csignal,Opt);
