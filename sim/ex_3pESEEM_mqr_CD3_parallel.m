@@ -1,4 +1,4 @@
-function [t,signal,frq,spectrum] = ex_2pESEEM_mqr(Sys,Exp,Opt)
+function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CD3_parallel(Sys,Exp,Opt)
 
 % 2pESEEM simulation script
 %
@@ -31,7 +31,13 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr(Sys,Exp,Opt)
 %       .methyl      1 if a methyl group is in close proximity of e-spin
 %                    default = 0
 %       .vt          methyl quantum rotor tunnel frequency [MHz]
-%                    default: 0.1
+%                    default: 0.02
+%       .vNQ         nuclear quadrupole coupling frequency for 2H [MHz]
+%                    default: 0.2
+%       .eta         asymmetry of nuclear quadrupole interaction (0 <= eta <= 1)
+%                    default: 0
+%       .NQcoord     coordinates used to calculate z(PAS) for nuclear
+%                    quadrupolar interaction (rows = nucleus, colums = [x y z] )
 %
 % Exp - struct with fields specifing the experimental parameters
 %       .mwfrq       microwave frequency [GHz]
@@ -141,10 +147,34 @@ end
 
 if Sys.methyl == 1
     if ~isfield(Sys,'vt')
-        Sys.vt = 1.2;
+        Sys.vt = 0.02;
     else
         validateattributes(Sys.vt,{'numeric'},{'nonnegative','scalar'})
     end
+end
+
+if numel((Sys.Itype == "2H")) > 0
+    if ~isfield(Sys,'vNQ')
+        Sys.vNQ = 0.2;
+    else
+        validateattributes(Sys.vNQ,{'numeric'},{'nonnegative','scalar'})
+    end
+    if ~isfield(Sys,'eta')
+        Sys.eta = 0;
+    else
+        validateattributes(Sys.eta,{'numeric'},{'nonnegative','scalar','<=',1})
+    end
+    if isfield(Sys,'NQcoord')
+        if size(Sys.NQcoord,2) ~= 3
+            error('X of X-D bond must all get x,y,z coordinates. \n Columns(Sys.NQcoord) must be equal to x,y,z.')
+        end
+    else
+        error('Deuteriums are in the spin system, therefore the nuclear quadrupole interaction must be taken into account.\n Pass information on z-PAS-axis of X-D.')
+    end
+end
+
+if length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])
+    error('This program simulates the methyl quantum rotor tunnel effect for a CD3-group!')
 end
 
 % Exp input validation %
@@ -197,7 +227,7 @@ else
         validateattributes(Exp.tpi2,{'numeric'},{'nonnegative','scalar'})
     end
     if ~isfield(Exp,'tpi')
-        Exp.tpi = 0.012;
+        Exp.tpi = 0.024;
     else
         validateattributes(Exp.tpi,{'numeric'},{'nonnegative','scalar'})
     end
@@ -252,7 +282,7 @@ end
 % ------------------------- %
 
 npoints = Exp.npoints;
-t = linspace(Exp.tau,(Exp.npoints-1)*Exp.dt,Exp.npoints);
+t = linspace(2*Exp.tau,2*Exp.tau +2*(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
 if Opt.zerofilling == Exp.npoints
     spectrum = zeros(1,2*Exp.npoints);
@@ -260,9 +290,8 @@ else
     spectrum = zeros(1,Opt.zerofilling);
 end
 
-
-% Calculate constants, frequencies, distances and anisotropic HF coupling %
-% ----------------------------------------------------------------------- %
+% Calculate constants, frequencies, distances, anisotropic HF coupling and NQI %
+% ---------------------------------------------------------------------------- %
 
 ye = gfree*bmagn/hbar;
 
@@ -273,11 +302,20 @@ if Sys.Inum > 0
         yi(k)     = gyro/2/pi/1e6;                                         % [MHz T^-1]
         wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % [MHz]
         distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
-        r(k)      = distance;                                              % [�]
-        uvec(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
+        r(k)      = distance;                                              % [Å]
+        uv_dd(k,:)= (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
         wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
+        if numel((Sys.Itype == "2H")) > 0
+            K(k) = Sys.vNQ/(4*nucdata(Sys.Itype{k})*(2*nucdata(Sys.Itype{k})-1));   % NQI coupling constant [MHz]
+            dist = norm(Sys.Icoord(k,:) - Sys.NQcoord);                             % [Å]
+            z    = (Sys.Icoord(k,:) - Sys.NQcoord)/dist;
+            xy   = null(z)';
+            x    = xy(1,:);
+            uv_nqz(k,:) = z;                                                        % z-PAS unit vector
+            uv_nqx(k,:) = x;                                                        % x-PAS unit vector
+        end
     end
-    fprintf(1,'The S-H distances are : %4.1f, %4.1f, %4.1f A\n',r(1:3))
+    fprintf(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
 end
 
 % Generate spin operators %
@@ -311,12 +349,14 @@ switch multiplenuc
             iz{k} = sop(spinvec,stringvec);
             
             stringvec      = repmat('e',1,Sys.Inum);
-            stringvec(k) = 'z';
+            stringvec(k)   = 'z';
             sziz{k} = sop(spinvec,strcat('z',stringvec));
             
-            stringvec    = repmat('e',1,Sys.Inum);
-            stringvec(k) = 'x';
+            stringvec      = repmat('e',1,Sys.Inum);
+            stringvec(k)   = 'x';
             szix{k} = sop(spinvec,strcat('z',stringvec));
+            
+            inq{k} = 3*iz{k}*iz{k} - (ix{k}*ix{k} + iy{k}*iy{k} + iz{k}*iz{k});
             
         end
         n    = size(sx,1);
@@ -329,7 +369,7 @@ end
 hamstart = Sys.ws*sz;
 
 if Sys.methyl == 1
-    if (length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])) || (length(find(Sys.Itype == "2H")) >= 3 && isequal(find(Sys.Itype == "2H"),[1 2 3]))
+    if (length(find(Sys.Itype == "2H")) >= 3 && isequal(find(Sys.Itype == "2H"),[1 2 3]))
         et   = sop(1,'e');
         sx   = kron(et,sx);
         sy   = kron(et,sy);
@@ -348,6 +388,8 @@ if Sys.methyl == 1
     else
         error('Methyl quantum rotor effect can only be taken into account when a methyl group is present in structure, i.e. at least 3 1H required.)');
     end
+else
+    to = [];
 end
 
 % Simulation loop over a set of magnetic field orientations %
@@ -355,28 +397,46 @@ end
 [vecs,weights] = sphgrid('Ci',Opt.knots,'c');
 nori = length(weights); % number of orientations
 
-for ori = 1:nori
+parfor ori = 1:nori
     
     % Prepare Hamiltonian for the different cases %
     % ------------------------------------------- %
     ham = hamstart;
     if Sys.Inum > 0
+        sub = zeros(size(sziz{1}));
+        addhamr2 = zeros(size(sziz{1}));
+        addhamr3 = zeros(size(sziz{1}));
         % calculate couplings
         cvec = vecs(:,ori)';
         for k = 1:Sys.Inum
-            unitvec = uvec(k,:);
-            ct  = sum(cvec.*unitvec);
-            a   = (3*ct^2-1)*wdd(k) + Sys.HFiso(k);
-            b   = 3*ct*sqrt(1-ct^2)*wdd(k);
-            A(k) = a;
+            uv_curr = uv_dd(k,:);
+            ct_dd  = sum(cvec.*uv_curr);
+            a   = (3*ct_dd^2-1)*wdd(k) + Sys.HFiso(k);
+            b   = 3*ct_dd*sqrt(1-ct_dd^2)*wdd(k);
             ham = ham + wI(k)*iz{k} + a*sziz{k} + b*szix{k};
+            if Sys.Itype(k) == "2H"
+                uv_z = uv_nqz(k,:);
+                uv_x = uv_nqx(k,:);
+                ct_theta = sum(cvec.*uv_z);
+                proj = cvec - uv_x;
+                ct_phi = sum(cvec.*proj)/norm(proj);
+                P = (3*ct_theta^2-1) + Sys.eta*(1-ct_theta^2)*(ct_phi^2 - (1-ct_phi^2));
+                P = K(k)*P;
+                ham = ham + P*inq{k};
+            end
+            if Sys.methyl == 1
+                helpvec = repmat([1 2 3],1,2);
+                if k <= 3
+                    sub  = sub + a*sziz{k} + b*szix{k} + P*inq{k};
+                    addhamr2 = addhamr2 + a*sziz{helpvec(k+2)} + b*szix{helpvec(k+2)} + P*inq{helpvec(k+2)};
+                    addhamr3 = addhamr3 + a*sziz{helpvec(k+1)} + b*szix{helpvec(k+1)} + P*inq{helpvec(k+1)};
+                end
+            end
         end
         if Sys.methyl == 1
-            a = A(1:3);
-            sub  = a(1)*sziz{1} + a(2)*sziz{2} + a(3)*sziz{3};                  % methyl rotation Hamiltonian
-            hamr1 = ham;
-            hamr2 = ham - sub + a(2)*sziz{1} + a(3)*sziz{2} + a(1)*sziz{3};     % methyl rotation Hamiltonian
-            hamr3 = ham - sub + a(3)*sziz{1} + a(1)*sziz{2} + a(2)*sziz{3};     % methyl rotation Hamiltonian
+            hamr1 = ham;                      % methyl rotation Hamiltonian 0°
+            hamr2 = ham - sub + addhamr2;     % methyl rotation Hamiltonian 120°
+            hamr3 = ham - sub + addhamr3;     % methyl rotation Hamiltonian 240°
             ham0 = zeros(3*n);
             ham0(1:n,1:n) = hamr1;
             ham0(n+1:2*n,n+1:2*n) = hamr2;
@@ -385,44 +445,45 @@ for ori = 1:nori
         end
     end
     
+    
     % Apply pulse sequence including phase cycle %
     % ------------------------------------------ %
     
     csignal = zeros(1,Exp.npoints);
     
     w_pi2 = 1/(4*Exp.tpi2);
-    w_pi  = 1/(2*Exp.tpi);
+    p_pc = phasecycle(w_pi2,Exp.phase(1,:),{sx,sy});       % generate pi/2 pulse with phase cycle as cell
     
-    p1_pc = phasecycle(w_pi2,Exp.phase(1,:),{sx,sy});       % generate pi/2 pulse with phase cycle as cell
-    p2_pc = phasecycle(w_pi,[],{sx,sy});                    % generate pi pulse with phase cycle as cell
     
     % Generation of propagators
-    for m = 1:length(p1_pc)
-        upi2{m} = expm(-1i*2*pi*(ham+p1_pc{m})*Exp.tpi2);
-    end
+    upi2 = gen_propagators(ham,Exp.tpi2,p_pc);
     
-    for m = 1:length(p2_pc)
-        upi{m} = expm(-1i*2*pi*(ham+p2_pc{m})*Exp.tpi);
-    end
     utau = expm(-1i*2*pi*ham*Exp.tau);
+    uT   = expm(-1i*2*pi*ham*Exp.T);
+    udt  = expm(-1i*2*pi*ham*Exp.dt);
     
-    % Propagation trough pulse sequence pi/2 - tau(+dt) - pi - tau(+dt) - det
+    % Propagation trough pulse sequence pi/2 - tau - pi/2 - T(+dt) - pi/2 - tau - det
     
-    sig = propagation_pc(sig0,upi2,Exp.addphase);
-    sig = utau*sig*utau';
+    sig = propagation_pc(sig0,upi2,Exp.addphase);           % pi/2 pulse
+    sig = utau*sig*utau';                                   % tau1
+    sig = propagation_pc(sig,upi2,Exp.addphase);            % pi/2 pulse
+    sig = uT*sig*uT';                                       % first T
     for p = 1:npoints
-        sig_tmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        sig_tmp = propagation_pc(sig_tmp,upi,[]);
-        sig_tmp = utau*sig_tmp*utau';
-        sig_tmp = expm(-1i*2*pi*ham*(p-1)*Exp.dt)*sig_tmp*expm(-1i*2*pi*ham*(p-1)*Exp.dt)';
-        csignal(p) = trace(sm*sig_tmp);
+        sig_tmp = propagation_pc(sig,upi2,Exp.addphase);    % pi/2 pulse
+        sig_tmp = utau*sig_tmp*utau';                       % tau2
+        csignal(p) = trace(sm*sig_tmp);                     % det
+        sig = udt*sig*udt';                                 % +dt (T)
     end
     signal  = signal + weights(ori)*csignal;
     csignal = csignal - mean(real(csignal)) - 1i*mean(imag(csignal));
-    [frq,cspectrum] = dft_ctav(t,csignal,Opt);
+    [cfrq,cspectrum] = dft_ctav(t,csignal,Opt);
+    if ori == 1
+        frq{ori} = cfrq;
+    end
     spectrum = spectrum + weights(ori)*cspectrum;
+    
 end
-
+frq = frq{1};
 spectrum = spectrum/sum(weights);
 signal   = signal/sum(weights);
 

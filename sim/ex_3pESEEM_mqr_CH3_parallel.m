@@ -1,6 +1,6 @@
-function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_parallel(Sys,Exp,Opt)
+function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 
-% 2pESEEM simulation script
+% 3pESEEM simulation script
 %
 % takes the following interactions into account:
 % - Electron Zeemann
@@ -31,23 +31,23 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_parallel(Sys,Exp,Opt)
 %       .methyl      1 if a methyl group is in close proximity of e-spin
 %                    default = 0
 %       .vt          methyl quantum rotor tunnel frequency [MHz]
-%                    default: 0.1
+%                    default: 0.2
 %
 % Exp - struct with fields specifing the experimental parameters
 %       .mwfrq       microwave frequency [GHz]
 %                    default: 35 (~ Q-Band)
 %       .B0          magnetic field [T]
 %                    default: 1.224 (= Q-Band)
-%       .tau         initial interpulse delay [us]
+%       .tau         first interpulse delay [us]
 %                    default: 0.120
 %       .dt          time increment [us]
+%                    default: 0.012
+%       .T           starting value for second interpulse delay
 %                    default: 0.012
 %       .npoints     number of points of time-domain signal
 %                    default: 1024
 %       .tpi2        pulse length pi/2 pulse [us]
 %                    default: 0.012
-%       .tpi         pulse length pi pulse [us]
-%                    default: 0.024
 %       .phase       phase cycle ("+-xy", column = phases, rows = pulses)
 %                    default: ["+x","-x"]
 %       .addphase    addition of phase cycle signals ("+","-", column = sign, rows = pulses)
@@ -57,9 +57,10 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_parallel(Sys,Exp,Opt)
 %       .knots       number of orientations on a meridian for with spectrum is simulated
 %                    default: 31
 %       .zerofilling dimension of zerofilling for DFT
-%                    default: Exp.npoints
+%                    default: 1
 %       .apodization apodization window for fourier transformation (see dft_ctav.m)
 %                    default: 'dolph-chebyshev'
+%       --> all options of dft_ctav.m for Fourier transform
 
 % Output:
 % t          time axis of 2p-ESEEM signal [us]
@@ -141,10 +142,14 @@ end
 
 if Sys.methyl == 1
     if ~isfield(Sys,'vt')
-        Sys.vt = 1.2;
+        Sys.vt = 0.2;
     else
         validateattributes(Sys.vt,{'numeric'},{'nonnegative','scalar'})
     end
+end
+
+if length(find(Sys.Itype == "2H")) >= 3 && isequal(find(Sys.Itype == "2H"),[1 2 3])
+    error('This program simulates the methyl quantum rotor tunnel effect for a CH3-group!')
 end
 
 % Exp input validation %
@@ -155,9 +160,9 @@ if ~exist('Exp','var')
     Exp.B0      = 1.224;
     Exp.tau     = 0.120;
     Exp.dt      = 0.012;
+    Exp.T       = 0.012;
     Exp.npoints = 1024;
     Exp.tpi2    = 0.012;
-    Exp.tpi     = 0.024;
     Exp.phase   = ["+x" "-x"];
     Exp.addphase= ["+" "-"];
 else
@@ -186,6 +191,11 @@ else
     else
         validateattributes(Exp.dt,{'numeric'},{'nonnegative','scalar'})
     end
+    if ~isfield(Exp,'T')
+        Exp.T = 0.012;
+    else
+        validateattributes(Exp.T,{'numeric'},{'nonnegative','scalar'})
+    end
     if ~isfield(Exp,'npoints')
         Exp.npoints = 1024;
     else
@@ -195,11 +205,6 @@ else
         Exp.tpi2 = 0.012;
     else
         validateattributes(Exp.tpi2,{'numeric'},{'nonnegative','scalar'})
-    end
-    if ~isfield(Exp,'tpi')
-        Exp.tpi = 0.024;
-    else
-        validateattributes(Exp.tpi,{'numeric'},{'nonnegative','scalar'})
     end
     if ~isfield(Exp,'phase')
         Exp.phase = ["+x" "-x"];
@@ -211,10 +216,10 @@ else
     else
         validateattributes(Exp.addphase,{'string'},{'nonempty'})
     end
-    if size(Exp.phase,1) > (length(Exp.tpi2)+length(Exp.tpi))
+    if size(Exp.phase,1) > (3*length(Exp.tpi2))
         error('Number of phase cycled pulses cannot exeed number of applied pulses in pulse sequence.')
     end
-    if size(Exp.addphase,1) > (length(Exp.tpi2)+length(Exp.tpi))
+    if size(Exp.addphase,1) > (3*length(Exp.tpi2))
         error('Number of phase cycled pulses cannot exeed number of applied pulses in pulse sequence.')
     end
     
@@ -247,12 +252,11 @@ else
     end
 end
 
-
 % Initialize output vectors %
 % ------------------------- %
 
 npoints = Exp.npoints;
-t = linspace(2*Exp.tau,2*Exp.tau +2*(Exp.npoints-1)*Exp.dt,Exp.npoints);
+t = linspace(Exp.T,(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
 if Opt.zerofilling == Exp.npoints
     spectrum = zeros(1,2*Exp.npoints);
@@ -272,8 +276,8 @@ if Sys.Inum > 0
         yi(k)     = gyro/2/pi/1e6;                                         % [MHz T^-1]
         wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % [MHz]
         distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
-        r(k)      = distance;                                          % [Å]
-        uvec(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;           % unit vector
+        r(k)      = distance;                                              % [Å]
+        uv_dd(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
         wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
     end
     fprintf(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
@@ -368,10 +372,10 @@ parfor ori = 1:nori
         % calculate couplings
         cvec = vecs(:,ori)';
         for k = 1:Sys.Inum
-            unitvec = uvec(k,:);
-            ct  = sum(cvec.*unitvec);
-            a   = (3*ct^2-1)*wdd(k) + Sys.HFiso(k);
-            b   = 3*ct*sqrt(1-ct^2)*wdd(k);
+            uv_curr = uv_dd(k,:);
+            ct_dd  = sum(cvec.*uv_curr);
+            a   = (3*ct_dd^2-1)*wdd(k) + Sys.HFiso(k);
+            b   = 3*ct_dd*sqrt(1-ct_dd^2)*wdd(k);
             ham = ham + wI(k)*iz{k} + a*sziz{k} + b*szix{k};
             if Sys.methyl == 1
                 helpvec = repmat([1 2 3],1,2);
@@ -400,28 +404,28 @@ parfor ori = 1:nori
     csignal = zeros(1,Exp.npoints);
     
     w_pi2 = 1/(4*Exp.tpi2);
-    w_pi  = 1/(2*Exp.tpi);
+    p_pc = phasecycle(w_pi2,Exp.phase(1,:),{sx,sy});       % generate pi/2 pulse with phase cycle as cell
     
-    p1_pc = phasecycle(w_pi2,Exp.phase(1,:),{sx,sy});       % generate pi/2 pulse with phase cycle as cell
-    p2_pc = phasecycle(w_pi,[],{sx,sy});                    % generate pi pulse with phase cycle as cell
     
     % Generation of propagators
-    upi2 = gen_propagators(ham,Exp.tpi2,p1_pc);
-    upi  = gen_propagators(ham,Exp.tpi,p2_pc);
+    upi2 = gen_propagators(ham,Exp.tpi2,p_pc);
+    
     utau = expm(-1i*2*pi*ham*Exp.tau);
+    uT   = expm(-1i*2*pi*ham*Exp.T);
     udt  = expm(-1i*2*pi*ham*Exp.dt);
     
-    % Propagation trough pulse sequence pi/2 - tau(+dt) - pi - tau(+dt) - det
-    sig = propagation_pc(sig0,upi2,Exp.addphase);                       % pi/2 pulse
-    sig = utau*sig*utau';                                               % tau1
-    for p = 1:npoints
-        sig_tmp = propagation_pc(sig,upi,[]);                           % pi pulse
-        sig_tmp = utau*sig_tmp*utau';                                   % tau2
-        sig_tmp = (udt^(p-1))*sig_tmp*(udt^(p-1))';                     % + dt (tau2)
-        csignal(p) = trace(sm*sig_tmp);                                 % det
-        sig = udt*sig*udt';                                             % +dt (tau1)
-    end
+    % Propagation trough pulse sequence pi/2 - tau - pi/2 - T(+dt) - pi/2 - tau - det
     
+    sig = propagation_pc(sig0,upi2,Exp.addphase);           % pi/2 pulse
+    sig = utau*sig*utau';                                   % tau1
+    sig = propagation_pc(sig,upi2,Exp.addphase);            % pi/2 pulse
+    sig = uT*sig*uT';                                       % first T
+    for p = 1:npoints
+        sig_tmp = propagation_pc(sig,upi2,Exp.addphase);    % pi/2 pulse
+        sig_tmp = utau*sig_tmp*utau';                       % tau2
+        csignal(p) = trace(sm*sig_tmp);                     % det
+        sig = udt*sig*udt';                                 % +dt (T)
+    end
     signal  = signal + weights(ori)*csignal;
     csignal = csignal - mean(real(csignal)) - 1i*mean(imag(csignal));
     [cfrq,cspectrum] = dft_ctav(t,csignal,Opt);
@@ -429,6 +433,7 @@ parfor ori = 1:nori
         frq{ori} = cfrq;
     end
     spectrum = spectrum + weights(ori)*cspectrum;
+    
 end
 frq = frq{1};
 spectrum = spectrum/sum(weights);
