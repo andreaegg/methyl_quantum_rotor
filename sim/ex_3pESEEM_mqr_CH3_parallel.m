@@ -63,7 +63,7 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 %       --> all options of dft_ctav.m for Fourier transform
 
 % Output:
-% t          time axis of 2p-ESEEM signal [us]
+% t          time axis of 3p-ESEEM signal [us]
 % signal     ESEEM signal (complex, includes unmodulated part)
 % frq        frequency axis of spectrum [MHz]
 % spectrum   ESEEM spectrum (complex, negative and positive frequencies)

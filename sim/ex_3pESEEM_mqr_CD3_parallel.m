@@ -1,6 +1,6 @@
 function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CD3_parallel(Sys,Exp,Opt)
 
-% 2pESEEM simulation script
+% 3pESEEM simulation script
 %
 % takes the following interactions into account:
 % - Electron Zeemann
@@ -44,16 +44,16 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CD3_parallel(Sys,Exp,Opt)
 %                    default: 35 (~ Q-Band)
 %       .B0          magnetic field [T]
 %                    default: 1.224 (= Q-Band)
-%       .tau         initial interpulse delay [us]
+%       .tau         first interpulse delay [us]
 %                    default: 0.120
 %       .dt          time increment [us]
+%                    default: 0.012
+%       .T           starting value for second interpulse delay
 %                    default: 0.012
 %       .npoints     number of points of time-domain signal
 %                    default: 1024
 %       .tpi2        pulse length pi/2 pulse [us]
 %                    default: 0.012
-%       .tpi         pulse length pi pulse [us]
-%                    default: 0.024
 %       .phase       phase cycle ("+-xy", column = phases, rows = pulses)
 %                    default: ["+x","-x"]
 %       .addphase    addition of phase cycle signals ("+","-", column = sign, rows = pulses)
@@ -68,7 +68,7 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CD3_parallel(Sys,Exp,Opt)
 %                    default: 'dolph-chebyshev'
 
 % Output:
-% t          time axis of 2p-ESEEM signal [us]
+% t          time axis of 3p-ESEEM signal [us]
 % signal     ESEEM signal (complex, includes unmodulated part)
 % frq        frequency axis of spectrum [MHz]
 % spectrum   ESEEM spectrum (complex, negative and positive frequencies)
