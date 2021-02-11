@@ -282,7 +282,7 @@ end
 % ------------------------- %
 
 npoints = Exp.npoints;
-t = linspace(2*Exp.tau,2*Exp.tau +2*(Exp.npoints-1)*Exp.dt,Exp.npoints);
+t = linspace(Exp.T,(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
 if Opt.zerofilling == Exp.npoints
     spectrum = zeros(1,2*Exp.npoints);
@@ -315,7 +315,6 @@ if Sys.Inum > 0
             uv_nqx(k,:) = x;                                                        % x-PAS unit vector
         end
     end
-    fprintf(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
 end
 
 % Generate spin operators %

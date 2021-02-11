@@ -315,7 +315,6 @@ if Sys.Inum > 0
             uv_nqx(k,:) = x;                                                        % x-PAS unit vector
         end
     end
-    fprintf(1,'The S-I distances are : %4.1f, %4.1f, %4.1f A\n',r)
 end
 
 % Generate spin operators %
