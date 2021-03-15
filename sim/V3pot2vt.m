@@ -1,4 +1,12 @@
+
 function [vt,Potential,Energy] = V3pot2vt(V3,nreigval,rotor)
+
+if nargin < 2
+    nreigval = 50;
+end
+if nargin < 3
+    rotor = 'CH3';
+end
 
 switch rotor
     case 'CH3'
