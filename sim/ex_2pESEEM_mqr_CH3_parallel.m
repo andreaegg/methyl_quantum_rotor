@@ -273,12 +273,12 @@ if Sys.Inum > 0
     for k = 1:Sys.Inum
         I(k)      = nucdata(Sys.Itype{k});
         gyro      = nucgval(Sys.Itype{k})*nmagn/hbar;
-        yi(k)     = gyro/2/pi/1e6;                                         % [MHz T^-1]
-        wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % [MHz]
+        yi(k)     = gyro/2/pi/1e6;                                         % nu [MHz T^-1]
+        wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % omega [MHz]
         distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
         r(k)      = distance;                                              % [Å]
         uv_dd(k,:)= (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
-        wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
+        wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % omega [MHz]
     end
 end
 
@@ -409,8 +409,8 @@ parfor ori = 1:nori
     p2_pc = phasecycle(w_pi,[],{sx,sy});                    % generate pi pulse with phase cycle as cell
     
     % Generation of propagators
-    upi2 = gen_propagators(ham,Exp.tpi2,p1_pc);
-    upi  = gen_propagators(ham,Exp.tpi,p2_pc);
+    upi2 = gen_propagators(Exp.tpi2,p1_pc);
+    upi  = gen_propagators(Exp.tpi,p2_pc);
     utau = expm(-1i*2*pi*ham*Exp.tau);
     udt  = expm(-1i*2*pi*ham*Exp.dt);
     
