@@ -256,7 +256,7 @@ end
 % ------------------------- %
 
 npoints = Exp.npoints;
-t = linspace(Exp.T,(Exp.npoints-1)*Exp.dt,Exp.npoints);
+t = linspace(Exp.T,Exp.T + (Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
 if Opt.zerofilling == Exp.npoints
     spectrum = zeros(1,2*Exp.npoints);
@@ -333,20 +333,19 @@ hamstart = Sys.ws*sz;
 if Sys.methyl == 1
     if length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])
         et   = sop(1,'e');
+        rx   = sop(1,'x');
+        ry   = sop(1,'y');
+        e1   = [1 0 0;0 0 0;0 0 0];
+        e2   = [0 0 0;0 1 0;0 0 0];
+        e3   = [0 0 0;0 0 0;0 0 1];
+        ebig = eye(2^4);
         sx   = kron(et,sx);
         sy   = kron(et,sy);
         sz   = kron(et,sz);
         sm   = kron(et,sm);
         sig0 = -sz;
-        to   = zeros(size(sm));
-        for k = 1:2*n
-            to(k,k+n) = -1;
-            to(k+n,k) = -1;
-        end
-        for k = 1:n
-            to(k,k+2*n) = -1;
-            to(k+2*n,k) = -1;
-        end
+        rmqr = -(Sys.vt/3)*(rx*rx - ry*ry + sqrt(2)*rx);
+        to   = kron(rmqr,ebig);
     else
         error('Methyl quantum rotor effect can only be taken into account when a methyl group is present in structure, i.e. at least 3 1H required.)');
     end
@@ -389,11 +388,8 @@ parfor ori = 1:nori
             hamr1 = ham;                      % methyl rotation Hamiltonian
             hamr2 = ham - sub + addhamr2;     % methyl rotation Hamiltonian
             hamr3 = ham - sub + addhamr3;     % methyl rotation Hamiltonian
-            ham0 = zeros(3*n);
-            ham0(1:n,1:n) = hamr1;
-            ham0(n+1:2*n,n+1:2*n) = hamr2;
-            ham0(2*n+1:3*n,2*n+1:3*n) = hamr3;
-            ham = ham0 + (1/3)*Sys.vt*to;
+            ham0 = kron(e1,hamr1) + kron(e2,hamr2) + kron(e3,hamr3);
+            ham = ham0 + to;
         end
     end
     
@@ -407,23 +403,25 @@ parfor ori = 1:nori
     
     
     % Generation of propagators
-    upi2 = gen_propagators(ham,Exp.tpi2,p_pc);
+    [upi2,upi2r] = gen_propagators(Exp.tpi2,p_pc);
+    utau  = expm(-1i*2*pi*ham*Exp.tau);
+    utaur = expm(1i*2*pi*ham*Exp.tau);
+    uT    = expm(-1i*2*pi*ham*Exp.T);
+    uTr   = expm(1i*2*pi*ham*Exp.T);
+    udt   = expm(-1i*2*pi*ham*Exp.dt);
+    udtr  = expm(1i*2*pi*ham*Exp.dt);
     
-    utau = expm(-1i*2*pi*ham*Exp.tau);
-    uT   = expm(-1i*2*pi*ham*Exp.T);
-    udt  = expm(-1i*2*pi*ham*Exp.dt);
+    % Propagation through pulse sequence pi/2 - tau - pi/2 - T(+dt) - pi/2 - tau - det
     
-    % Propagation trough pulse sequence pi/2 - tau - pi/2 - T(+dt) - pi/2 - tau - det
-    
-    sig = propagation_pc(sig0,upi2,Exp.addphase);           % pi/2 pulse
-    sig = utau*sig*utau';                                   % tau1
-    sig = propagation_pc(sig,upi2,Exp.addphase);            % pi/2 pulse
-    sig = uT*sig*uT';                                       % first T
+    sig = propagation_pc(sig0,upi2,upi2r,Exp.addphase);         % pi/2 pulse
+    sig = utau*sig*utaur;                                       % tau1
+    sig = propagation_pc(sig,upi2,upi2r,Exp.addphase);          % pi/2 pulse
+    sig = uT*sig*uTr;                                           % first T
     for p = 1:npoints
-        sig_tmp = propagation_pc(sig,upi2,Exp.addphase);    % pi/2 pulse
-        sig_tmp = utau*sig_tmp*utau';                       % tau2
-        csignal(p) = trace(sm*sig_tmp);                     % det
-        sig = udt*sig*udt';                                 % +dt (T)
+        sig_tmp = (udt^(p-1))*sig*(udtr^(p-1));                 % +dt (T)
+        sig_tmp = propagation_pc(sig_tmp,upi2,upi2r,Exp.addphase);        % pi/2 pulse
+        sig_tmp = utau*sig_tmp*utaur;                           % tau2
+        csignal(p) = trace(sm*sig_tmp);                         % det
     end
     signal  = signal + weights(ori)*csignal;
     csignal = csignal - mean(real(csignal)) - 1i*mean(imag(csignal));
