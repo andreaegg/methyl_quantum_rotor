@@ -258,11 +258,6 @@ end
 npoints = Exp.npoints;
 t = linspace(2*Exp.tau,2*Exp.tau +2*(Exp.npoints-1)*Exp.dt,Exp.npoints);
 signal = zeros(1,Exp.npoints);
-if Opt.zerofilling == Exp.npoints
-    spectrum = zeros(1,2*Exp.npoints);
-else
-    spectrum = zeros(1,Opt.zerofilling);
-end
 
 % Calculate constants, frequencies, distances and anisotropic HF coupling %
 % ----------------------------------------------------------------------- %
@@ -422,15 +417,6 @@ parfor ori = 1:nori
         csignal(p) = trace(sm*sig_tmp);                                 % det
     end
     signal  = signal + weights(ori)*csignal;
-    csignal = csignal - mean(real(csignal)) - 1i*mean(imag(csignal));
-    [cfrq,cspectrum] = dft_ctav(t,csignal,Opt);
-    if ori == 1
-        frq{ori} = cfrq;
-    end
-    spectrum = spectrum + weights(ori)*cspectrum;
 end
-frq = frq{1};
-spectrum = spectrum/sum(weights);
 signal   = signal/sum(weights);
-
 end
