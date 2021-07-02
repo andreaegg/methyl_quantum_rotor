@@ -1,4 +1,4 @@
-function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
+function [t,signal] = ex_2pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 
 % 2pESEEM simulation script
 %
@@ -56,16 +56,10 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 % Opt - struct with simulation options
 %       .knots       number of orientations on a meridian for with spectrum is simulated
 %                    default: 31
-%       .zerofilling dimension of zerofilling for DFT
-%                    default: Exp.npoints
-%       .apodization apodization window for fourier transformation (see dft_ctav.m)
-%                    default: 'dolph-chebyshev'
 %
 % Output:
 % t          time axis of 2p-ESEEM signal [us]
 % signal     ESEEM signal (complex, includes unmodulated part)
-% frq        frequency axis of spectrum [MHz]
-% spectrum   ESEEM spectrum (complex, negative and positive frequencies)
 %
 % adapted from G. Jeschke and D. Klose 2018
 
@@ -229,27 +223,12 @@ end
 
 if ~exist('Opt','var')
     Opt.knots = 31;
-    Opt.apodization = 'dolph-chebyshev';
-    Opt.zerofilling = Exp.npoints;
 else
     if ~isfield(Opt,'knots')
         Opt.knots = 31;
     else
         validateattributes(Opt.knots,{'numeric'},{'nonnegative','scalar'})
     end
-    if ~isfield(Opt,'apodization')
-        Opt.apodization = 'dolph-chebyshev';
-    else
-        validateattributes(Opt.apodization,{'char'},{'nonempty'})
-        allowedInputs = {'none','hamming','dolph-chebyshev','kaiser','lorentz-gauss','sinebell'};
-        validatestring(Opt.apodization,allowedInputs);
-    end
-    if ~isfield(Opt,'zerofilling')
-        Opt.zerofilling = Exp.npoints;
-    else
-        validateattributes(Opt.zerofilling,{'numeric'},{'nonnegative','scalar'})
-    end
-end
 
 
 % Initialize output vectors %
