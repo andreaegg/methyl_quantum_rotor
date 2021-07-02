@@ -229,7 +229,7 @@ else
     else
         validateattributes(Opt.knots,{'numeric'},{'nonnegative','scalar'})
     end
-
+end
 
 % Initialize output vectors %
 % ------------------------- %

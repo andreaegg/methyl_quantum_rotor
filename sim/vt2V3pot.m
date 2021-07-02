@@ -1,4 +1,4 @@
-function [V3,energy,vt] = vt2V3pot(vt,nreigval,rotor,V3start)
+function [V3,vt,energy] = vt2V3pot(vt,nreigval,rotor,V3start)
 
 % Input:
 % vt : in MHz
