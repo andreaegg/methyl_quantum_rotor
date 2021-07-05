@@ -248,11 +248,11 @@ if Sys.Inum > 0
         I(k)      = nucdata(Sys.Itype{k});
         gyro      = nucgval(Sys.Itype{k})*nmagn/hbar;
         yi(k)     = gyro/2/pi/1e6;                                         % nu [MHz T^-1]
-        wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % omega [MHz]
+        wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % nu [MHz]
         distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
         r(k)      = distance;                                              % [Å]
         uv_dd(k,:)= (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
-        wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % omega [MHz]
+        wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % nu [MHz]
     end
 end
 
