@@ -1,6 +1,7 @@
-function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 
-% 3pESEEM simulation script
+function [t,signal] = ex_3pSIFTER_mqr_CH3_parallel(Sys,Exp,Opt)
+
+% 2pESEEM simulation script
 %
 % takes the following interactions into account:
 % - Electron Zeemann
@@ -9,9 +10,9 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 % - Methyl quantum rotor mixing
 % -> negligible dipolar proton-proton coupling
 % -> ZFS not taken into account
-
+%
 % requires EasySpin
-
+%
 % Input:
 % Sys - struct with fields specifing spin system
 %       .g           g-value of observed e-spin
@@ -38,16 +39,18 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 %                    default: 35 (~ Q-Band)
 %       .B0          magnetic field [T]
 %                    default: 1.224 (= Q-Band)
-%       .tau         first interpulse delay [us]
-%                    default: 0.120
+%       .taumin      minimal interpulse delay [us]
+%                    default: 0.100
+%       .taumax      maximal interpulse delay [us]
+%                    default: 2.5
 %       .dt          time increment [us]
-%                    default: 0.012
-%       .T           starting value for second interpulse delay
 %                    default: 0.012
 %       .npoints     number of points of time-domain signal
 %                    default: 1024
 %       .tpi2        pulse length pi/2 pulse [us]
 %                    default: 0.012
+%       .tpi         pulse length pi pulse [us]
+%                    default: 0.024
 %       .phase       phase cycle ("+-xy", column = phases, rows = pulses)
 %                    default: ["+x","-x"]
 %       .addphase    addition of phase cycle signals ("+","-", column = sign, rows = pulses)
@@ -56,13 +59,13 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 % Opt - struct with simulation options
 %       .knots       number of orientations on a meridian for with spectrum is simulated
 %                    default: 31
-
+%
 % Output:
-% t          time axis of 3p-ESEEM signal [us]
+% t          time axis of 2p-ESEEM signal [us]
 % signal     ESEEM signal (complex, includes unmodulated part)
-
+%
 % adapted from G. Jeschke and D. Klose 2018
-% modified by Andrea Eggeling 2021
+
 
 
 % Sys input validation %
@@ -151,13 +154,15 @@ end
 if ~exist('Exp','var')
     Exp.mwfrq   = 35;
     Exp.B0      = 1.224;
-    Exp.tau     = 0.120;
-    Exp.dt      = 0.012;
-    Exp.T       = 0.012;
-    Exp.npoints = 1024;
+    Exp.taumin  = 0;
+    Exp.taumax  = 5;
+    Exp.dt      = 0.010;
     Exp.tpi2    = 0.012;
-    Exp.phase   = ["+x" "-x"];
-    Exp.addphase= ["+" "-"];
+    Exp.tpi     = 0.024;
+    Exp.phase   = ["+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x";...
+                   "+x" "+y" "-x" "-y" "+x" "+y" "-x" "-y" "+x" "+y" "-x" "-y" "+x" "+y" "-x" "-y";...
+                   "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "-x" "-x" "-x" "-x" "-x" "-x" "-x" "-x"];
+    Exp.addphase= ["+" "-" "+" "-" "+" "-" "+" "-" "+" "-" "+" "-" "+" "-" "+" "-"];
 else
     if ~isfield(Exp,'mwfrq')
         Exp.mwfrq = 35;
@@ -174,45 +179,47 @@ else
         validateattributes(Exp.B0,{'numeric'},{'nonnegative','scalar'})
         Exp.mwfrq = Exp.B0*Sys.g*bmagn/(planck*1e9);
     end
-    if ~isfield(Exp,'tau')
-        Exp.tau = 0.120;
+    if ~isfield(Exp,'taumin')
+        Exp.taumin = 0;
     else
-        validateattributes(Exp.tau,{'numeric'},{'nonnegative','scalar'})
+        validateattributes(Exp.taumin,{'numeric'},{'nonnegative','scalar'})
+    end
+    if ~isfield(Exp,'taumax')
+        Exp.taumax = 5;
+    else
+        validateattributes(Exp.taumax,{'numeric'},{'nonnegative','scalar'})
     end
     if ~isfield(Exp,'dt')
-        Exp.dt = 0.012;
+        Exp.dt = 0.010;
     else
         validateattributes(Exp.dt,{'numeric'},{'nonnegative','scalar'})
-    end
-    if ~isfield(Exp,'T')
-        Exp.T = 0.012;
-    else
-        validateattributes(Exp.T,{'numeric'},{'nonnegative','scalar'})
-    end
-    if ~isfield(Exp,'npoints')
-        Exp.npoints = 1024;
-    else
-        validateattributes(Exp.npoints,{'numeric'},{'nonnegative','scalar'})
     end
     if ~isfield(Exp,'tpi2')
         Exp.tpi2 = 0.012;
     else
         validateattributes(Exp.tpi2,{'numeric'},{'nonnegative','scalar'})
     end
+    if ~isfield(Exp,'tpi')
+        Exp.tpi = 0.024;
+    else
+        validateattributes(Exp.tpi,{'numeric'},{'nonnegative','scalar'})
+    end
     if ~isfield(Exp,'phase')
-        Exp.phase = ["+x" "-x"];
+        Exp.phase   = ["+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x";...
+                       "+x" "+y" "-x" "-y" "+x" "+y" "-x" "-y" "+x" "+y" "-x" "-y" "+x" "+y" "-x" "-y";...
+                       "+x" "+x" "+x" "+x" "+x" "+x" "+x" "+x" "-x" "-x" "-x" "-x" "-x" "-x" "-x" "-x"];
     else
         validateattributes(Exp.phase,{'string'},{'nonempty'})
     end
     if ~isfield(Exp,'addphase')
-        Exp.addphase = ["+" "-"];
+        Exp.addphase= ["+" "-" "+" "-" "+" "-" "+" "-" "+" "-" "+" "-" "+" "-" "+" "-"];
     else
         validateattributes(Exp.addphase,{'string'},{'nonempty'})
     end
-    if size(Exp.phase,1) > (3*length(Exp.tpi2))
+    if size(Exp.phase,1) > (2*length(Exp.tpi2)+2*length(Exp.tpi))
         error('Number of phase cycled pulses cannot exeed number of applied pulses in pulse sequence.')
     end
-    if size(Exp.addphase,1) > (3*length(Exp.tpi2))
+    if size(Exp.addphase,1) > (2*length(Exp.tpi2)+2*length(Exp.tpi))
         error('Number of phase cycled pulses cannot exeed number of applied pulses in pulse sequence.')
     end
     
@@ -233,10 +240,9 @@ end
 
 % Initialize output vectors %
 % ------------------------- %
-
-npoints = Exp.npoints;
-t = linspace(Exp.T,Exp.T + (Exp.npoints-1)*Exp.dt,Exp.npoints);
-signal = zeros(1,Exp.npoints);
+npoints = 2*floor((Exp.taumax-Exp.taumin)/Exp.dt)+1;
+t = linspace(Exp.taumin-Exp.taumax,Exp.taumax-Exp.taumin,npoints);
+signal = zeros(1,npoints);
 
 % Calculate constants, frequencies, distances and anisotropic HF coupling %
 % ----------------------------------------------------------------------- %
@@ -247,12 +253,12 @@ if Sys.Inum > 0
     for k = 1:Sys.Inum
         I(k)      = nucdata(Sys.Itype{k});
         gyro      = nucgval(Sys.Itype{k})*nmagn/hbar;
-        yi(k)     = gyro/2/pi/1e6;                                         % [MHz T^-1]
-        wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % [MHz]
+        yi(k)     = gyro/2/pi/1e6;                                         % nu [MHz T^-1]
+        wI(k)     = -gyro*Exp.B0/2/pi/1e6;                                 % nu [MHz]
         distance  = norm(Sys.Icoord(k,:) - Sys.Scoord);
         r(k)      = distance;                                              % [Å]
-        uv_dd(k,:) = (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
-        wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % [MHz]
+        uv_dd(k,:)= (Sys.Icoord(k,:) - Sys.Scoord)/distance;               % unit vector
+        wdd(k)    = ye*gyro*mu0*hbar/(4*pi*(distance*1e-10)^3)/(2*pi*1e6); % nu [MHz]
     end
 end
 
@@ -305,7 +311,7 @@ end
 hamstart = Sys.ws*sz;
 
 if Sys.methyl == 1
-    if length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3])
+    if (length(find(Sys.Itype == "1H")) >= 3 && isequal(find(Sys.Itype == "1H"),[1 2 3]))
         et   = sop(1,'e');
         rx   = sop(1,'x');
         ry   = sop(1,'y');
@@ -333,7 +339,6 @@ end
 nori = length(weights); % number of orientations
 
 parfor ori = 1:nori
-    
     % Prepare Hamiltonian for the different cases %
     % ------------------------------------------- %
     ham = hamstart;
@@ -370,32 +375,45 @@ parfor ori = 1:nori
     % Apply pulse sequence including phase cycle %
     % ------------------------------------------ %
     
-    csignal = zeros(1,Exp.npoints);
-    
+    csignal = zeros(1,npoints);
+
     w_pi2 = 1/(4*Exp.tpi2);
-    p_pc = phasecycle(w_pi2,Exp.phase(1,:),{sx,sy});       % generate pi/2 pulse with phase cycle as cell
+    w_pi  = 1/(2*Exp.tpi);
     
+    p1_pc = phasecycle(w_pi2,Exp.phase(1,:),{sx,sy});       % generate pi/2 pulse with phase cycle as cell
+    p2_pc = phasecycle(w_pi,Exp.phase(2,:),{sx,sy});        % generate pi pulse with phase cycle as cell
+    p3_pc = phasecycle(w_pi,Exp.phase(3,:),{sx,sy});        % generate pi pulse with phase cycle as cell
     
     % Generation of propagators
-    [upi2,upi2r] = gen_propagators(Exp.tpi2,p_pc);
-    utau  = expm(-1i*2*pi*ham*Exp.tau);
-    utaur = expm(1i*2*pi*ham*Exp.tau);
-    uT    = expm(-1i*2*pi*ham*Exp.T);
-    uTr   = expm(1i*2*pi*ham*Exp.T);
-    udt   = expm(-1i*2*pi*ham*Exp.dt);
-    udtr  = expm(1i*2*pi*ham*Exp.dt);
+    [upi2_1,upi2r_1] = gen_propagators(Exp.tpi2,p1_pc);
+    [upi_2,upir_2]   = gen_propagators(Exp.tpi,p2_pc);
+    [upi_3,upir_3]   = gen_propagators(Exp.tpi,p3_pc);
     
-    % Propagation through pulse sequence pi/2 - tau - pi/2 - T(+dt) - pi/2 - tau - det
-    
-    sig = propagation_pc(sig0,upi2,upi2r,Exp.addphase);         % pi/2 pulse
-    sig = utau*sig*utaur;                                       % tau1
-    sig = propagation_pc(sig,upi2,upi2r,Exp.addphase);          % pi/2 pulse
-    sig = uT*sig*uTr;                                           % first T
+    % Propagation trough pulse sequence pi/2 - tau(+dt) - pi - tau(+dt) - det
     for p = 1:npoints
-        sig_tmp = (udt^(p-1))*sig*(udtr^(p-1));                 % +dt (T)
-        sig_tmp = propagation_pc(sig_tmp,upi2,upi2r,Exp.addphase);        % pi/2 pulse
-        sig_tmp = utau*sig_tmp*utaur;                           % tau2
-        csignal(p) = trace(sm*sig_tmp);                         % det
+        sigma = zeros(size(sig0));
+        tau1 = Exp.taumin + (p-1)*Exp.dt;
+        tau2 = Exp.taumax - (p-1)*Exp.dt;
+        utau1  = expm(-1i*2*pi*ham*tau1);
+        utaur1 = expm(1i*2*pi*ham*tau1);
+        utau2  = expm(-1i*2*pi*ham*tau2);
+        utaur2 = expm(1i*2*pi*ham*tau2);
+        for q = 1:length(Exp.addphase)
+            sig_tmp = upi2_1{q}*sig0*upi2r_1{q};         % pi/2 pulse
+            sig_tmp = utau1*sig_tmp*utaur1;              % tau1
+            sig_tmp = upi_2{q}*sig_tmp*upir_2{q};        % pi pulse
+            sig_tmp = utau1*sig_tmp*utaur1;              % tau1
+            sig_tmp = utau2*sig_tmp*utaur2;              % tau2
+            sig_tmp = upi_3{q}*sig_tmp*upir_3{q};        % pi pulse
+            sig_tmp = utau2*sig_tmp*utaur2;              % tau2
+            switch Exp.addphase(q)
+                case "+"
+                    sigma = sigma + sig_tmp/length(Exp.addphase);
+                case "-"
+                    sigma = sigma - sig_tmp/length(Exp.addphase);
+            end
+        end
+        csignal(p) = trace(sm*sigma);                % det
     end
     signal  = signal + weights(ori)*csignal;
 end

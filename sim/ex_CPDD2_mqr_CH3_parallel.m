@@ -1,4 +1,4 @@
-function [t,signal] = ex_CPDD2_mqr_CH3_parallel(Sys,Exp,Opt)
+ffunction [t,signal] = ex_CPDD2_mqr_CH3_parallel(Sys,Exp,Opt)
 
 % Carr-Purcell Dynamical Decoupling n=2 simulation script
 %
