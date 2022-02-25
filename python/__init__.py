@@ -2,3 +2,4 @@
 
 from .distributions import *
 from .analysis import *
+from .modelling import *
