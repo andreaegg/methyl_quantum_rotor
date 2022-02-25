@@ -20,10 +20,17 @@ else
     currKb = load(inputb);
     currKc = load(inputc);
     currKd = load(inputd);
-    Ka = currK.Ka;
-    Kb = currKb.Kb;
-    Kc = currKc.Kc;
-    Kd = currKd.Kd;
+    if isfield(currK,'Ka')
+        Ka = currK.Ka;
+        Kb = currKb.Kb;
+        Kc = currKc.Kc;
+        Kd = currKd.Kd;
+    else
+        Ka = currK.K;
+        Kb = currKb.K;
+        Kc = currKc.K;
+        Kd = currKd.K;
+    end
     Ktime = (Ka + Kb + Kc + Kd)/4;
 end
 vt   = currK.vt;
