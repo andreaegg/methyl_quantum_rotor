@@ -1,4 +1,4 @@
-function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_CD3_parallel(Sys,Exp,Opt)
+function [t,signal,hamtot] = ex_2pESEEM_mqr_CD3_parallel(Sys,Exp,Opt)
 
 % 2pESEEM simulation script
 %
@@ -62,16 +62,10 @@ function [t,signal,frq,spectrum] = ex_2pESEEM_mqr_CD3_parallel(Sys,Exp,Opt)
 % Opt - struct with simulation options
 %       .knots       number of orientations on a meridian for with spectrum is simulated
 %                    default: 31
-%       .zerofilling dimension of zerofilling for DFT
-%                    default: Exp.npoints
-%       .apodization apodization window for fourier transformation (see dft_ctav.m)
-%                    default: 'dolph-chebyshev'
 
 % Output:
 % t          time axis of 2p-ESEEM signal [us]
 % signal     ESEEM signal (complex, includes unmodulated part)
-% frq        frequency axis of spectrum [MHz]
-% spectrum   ESEEM spectrum (complex, negative and positive frequencies)
 
 % adapted from G. Jeschke and D. Klose 2018
 
@@ -250,34 +244,6 @@ else
     
 end
 
-% Opt input validation %
-% -------------------- %
-
-if ~exist('Opt','var')
-    Opt.knots = 31;
-    Opt.apodization = 'dolph-chebyshev';
-    Opt.zerofilling = Exp.npoints;
-else
-    if ~isfield(Opt,'knots')
-        Opt.knots = 31;
-    else
-        validateattributes(Opt.knots,{'numeric'},{'nonnegative','scalar'})
-    end
-    if ~isfield(Opt,'apodization')
-        Opt.apodization = 'dolph-chebyshev';
-    else
-        validateattributes(Opt.apodization,{'char'},{'nonempty'})
-        allowedInputs = {'none','hamming','dolph-chebyshev','kaiser','lorentz-gauss','sinebell'};
-        validatestring(Opt.apodization,allowedInputs);
-    end
-    if ~isfield(Opt,'zerofilling')
-        Opt.zerofilling = Exp.npoints;
-    else
-        validateattributes(Opt.zerofilling,{'numeric'},{'nonnegative','scalar'})
-    end
-end
-
-
 % Initialize output vectors %
 % ------------------------- %
 
@@ -387,10 +353,16 @@ end
 
 % Simulation loop over a set of magnetic field orientations %
 % --------------------------------------------------------- %
-[vecs,weights] = sphgrid('Ci',Opt.knots,'c');
+if isempty(Opt.weights)
+    [vecs,weights] = sphgrid('Ci',Opt.knots,'c');
+elseif ~isempty(Opt.weights)
+    weights = Opt.weights;
+    vecs    = Opt.vecs;
+end
+
 nori = length(weights); % number of orientations
 
-parfor ori = 1:nori
+for ori = 1:nori
     P = 0;
     % Prepare Hamiltonian for the different cases %
     % ------------------------------------------- %
@@ -405,8 +377,8 @@ parfor ori = 1:nori
             uv_curr = uv_dd(k,:);
             ct_dd  = sum(cvec.*uv_curr);
             a   = (3*ct_dd^2-1)*wdd(k) + Sys.HFiso(k);
-            b   = 3*ct_dd*sqrt(1-ct_dd^2)*wdd(k);
-            ham = ham + wI(k)*iz{k} + a*sziz{k} + b*szix{k};
+            % b   = 3*ct_dd*sqrt(1-ct_dd^2)*wdd(k);
+            ham = ham + wI(k)*iz{k} + a*sziz{k};% + b*szix{k};
             if Sys.Itype(k) == "2H"
                 uv_z = uv_nqz(k,:);
                 uv_x = uv_nqx(k,:);
@@ -420,9 +392,9 @@ parfor ori = 1:nori
             if Sys.methyl == 1
                 helpvec = repmat([1 2 3],1,2);
                 if k <= 3
-                    sub  = sub + a*sziz{k} + b*szix{k} + P*inq{k};
-                    addhamr2 = addhamr2 + a*sziz{helpvec(k+2)} + b*szix{helpvec(k+2)} + P*inq{helpvec(k+2)};
-                    addhamr3 = addhamr3 + a*sziz{helpvec(k+1)} + b*szix{helpvec(k+1)} + P*inq{helpvec(k+1)};
+                    sub  = sub + a*sziz{k} + P*inq{k};% + b*szix{k}
+                    addhamr2 = addhamr2 + a*sziz{helpvec(k+2)} + P*inq{helpvec(k+2)};% + b*szix{helpvec(k+2)}
+                    addhamr3 = addhamr3 + a*sziz{helpvec(k+1)} + P*inq{helpvec(k+1)};% + b*szix{helpvec(k+1)} 
                 end
             end
         end
@@ -432,6 +404,7 @@ parfor ori = 1:nori
             hamr3 = ham - sub + addhamr3;     % methyl rotation Hamiltonian 240°
             ham0 = kron(e1,hamr1) + kron(e2,hamr2) + kron(e3,hamr3);
             ham = ham0 + to;
+            hamtot = hamr1 + hamr2 + hamr3;
         end
     end
     

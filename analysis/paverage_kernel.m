@@ -8,7 +8,7 @@ part2 = input(stop:end);
 CH3groups = ["CH3a","CH3b","CH3c","CH3d"];
 idx       = find(CH3groups == startCH3);
 groups    = CH3groups(idx:(idx+parts-1));
-
+Ktime     = [];
 
 if isempty(start)
     currK   = load(input);
@@ -18,7 +18,6 @@ else
     for k = 1:length(groups)
         input = strcat(part1,groups(k),part2);
         currK = load(input);
-        Ktime = zeros(length(currK.V3),length(currK.T));
         if isfield(currK,'Ka')
             eval('K = currK.Ka;');
         elseif isfield(currK,'Kb')
@@ -29,6 +28,9 @@ else
             eval('K = currK.Kd;');
         else
             eval('K = currK.K;');
+        end
+        if k == 1
+            Ktime = zeros(length(currK.V3),length(currK.T));
         end
         Ktime = Ktime + K/parts;
     end

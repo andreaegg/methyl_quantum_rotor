@@ -23,7 +23,7 @@ switch side
         param = polyfit(B(end-points+1:end),int(end-points+1:end),degree);
         baseline = polyval(param,B);
     case 'both'
-        param = polyfit([B(1:points) B(end-points+1:end)],[int(1:points) int(end-points+1:end)],degree);
+        param  = polyfit([B(1:points) B(end-points+1:end)],[int(1:points) int(end-points+1:end)],degree);
         baseline = polyval(param,B);
 end
 

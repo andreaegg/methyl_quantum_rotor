@@ -14,7 +14,11 @@ switch atom
     case "O"
         rgb = colorss('red');
     case "Cu"
-        rgb = colorss('brown (traditional)');       
+        rgb = colorss('brown (traditional)');
+    case "Co"
+        rgb = colorss('brown (traditional)');
+    case "Zn"
+        rgb = colorss('brown (traditional)');  
 end
 
 end

@@ -1,4 +1,4 @@
-function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
+function [t,signal] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 
 % 3pESEEM simulation script
 %
@@ -56,6 +56,9 @@ function [t,signal,frq,spectrum] = ex_3pESEEM_mqr_CH3_parallel(Sys,Exp,Opt)
 % Opt - struct with simulation options
 %       .knots       number of orientations on a meridian for with spectrum is simulated
 %                    default: 31
+%       .weights     weights for orientation selection simulations
+%       .vecs        phi and theta dependent vectors for orientation
+%                    selection simulations
 
 % Output:
 % t          time axis of 3p-ESEEM signal [us]
@@ -215,7 +218,6 @@ else
     if size(Exp.addphase,1) > (3*length(Exp.tpi2))
         error('Number of phase cycled pulses cannot exeed number of applied pulses in pulse sequence.')
     end
-    
 end
 
 % Opt input validation %
@@ -229,6 +231,16 @@ else
     else
         validateattributes(Opt.knots,{'numeric'},{'nonnegative','scalar'})
     end
+    if ~isfield(Opt,'weights')
+        Opt.weights = [];
+    else
+        validateattributes(Opt.weights,{'numeric'},{'nonnegative','vector'})
+    end
+    if ~isfield(Opt,'vecs')
+        Opt.vecs = [];
+    else
+        validateattributes(Opt.vecs,{'numeric'},{'nrows',3})
+    end
 end
 
 % Initialize output vectors %
@@ -241,7 +253,7 @@ signal = zeros(1,Exp.npoints);
 % Calculate constants, frequencies, distances and anisotropic HF coupling %
 % ----------------------------------------------------------------------- %
 
-ye = gfree*bmagn/hbar;
+ye = Sys.g*bmagn/hbar;
 
 if Sys.Inum > 0
     for k = 1:Sys.Inum
@@ -329,10 +341,15 @@ end
 
 % Simulation loop over a set of magnetic field orientations %
 % --------------------------------------------------------- %
-[vecs,weights] = sphgrid('Ci',Opt.knots,'c');
+if isempty(Opt.weights)
+    [vecs,weights] = sphgrid('Ci',Opt.knots,'c');
+elseif ~isempty(Opt.weights)
+    weights = Opt.weights;
+    vecs    = Opt.vecs;
+end
 nori = length(weights); % number of orientations
 
-parfor ori = 1:nori
+for ori = 1:nori
     
     % Prepare Hamiltonian for the different cases %
     % ------------------------------------------- %
@@ -347,14 +364,14 @@ parfor ori = 1:nori
             uv_curr = uv_dd(k,:);
             ct_dd  = sum(cvec.*uv_curr);
             a   = (3*ct_dd^2-1)*wdd(k) + Sys.HFiso(k);
-            b   = 3*ct_dd*sqrt(1-ct_dd^2)*wdd(k);
-            ham = ham + wI(k)*iz{k} + a*sziz{k} + b*szix{k};
+%             b   = 3*ct_dd*sqrt(1-ct_dd^2)*wdd(k);
+            ham = ham + wI(k)*iz{k} + a*sziz{k};% + b*szix{k};
             if Sys.methyl == 1
                 helpvec = repmat([1 2 3],1,2);
                 if k <= 3
-                    sub  = sub + a*sziz{k} + b*szix{k};
-                    addhamr2 = addhamr2 + a*sziz{helpvec(k+2)} + b*szix{helpvec(k+2)};
-                    addhamr3 = addhamr3 + a*sziz{helpvec(k+1)} + b*szix{helpvec(k+1)};
+                    sub  = sub + a*sziz{k};% + b*szix{k};
+                    addhamr2 = addhamr2 + a*sziz{helpvec(k+2)};% + b*szix{helpvec(k+2)};
+                    addhamr3 = addhamr3 + a*sziz{helpvec(k+1)};% + b*szix{helpvec(k+1)};
                 end
             end
         end

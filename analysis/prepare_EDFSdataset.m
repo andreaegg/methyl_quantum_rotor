@@ -18,6 +18,7 @@ elseif nargin < 4
     stfrq = 34.5*1e9;
     data.B = planck*stfrq*1e3./(g*bmagn);
     data.param = input3;
+    norm = 0;
 end
 if norm
     data.spc = data.spc/max(data.spc);

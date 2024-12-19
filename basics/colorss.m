@@ -310,6 +310,7 @@ color_database('granny smith apple')=[0.660000 0.890000 0.630000];
 color_database('gray')=[0.500000 0.500000 0.500000];
 color_database('gray (html/css gray)')=[0.500000 0.500000 0.500000];
 color_database('gray (x11 gray)')=[0.750000 0.750000 0.750000];
+color_database('gray andrea')=[0.7 0.7 0.7];
 color_database('gray-asparagus')=[0.270000 0.350000 0.270000];
 color_database('green (color wheel) (x11 green)')=[0.000000 1.000000 0.000000];
 color_database('green (html/css green)')=[0.000000 0.500000 0.000000];

@@ -35,7 +35,11 @@ else
 end
 vt   = currK.vt;
 V3   = currK.V3;
-T    = currK.T;
+if ~isfield(currK,'T')
+    T    = currK.Ta;
+else
+    T    = currK.T;
+end
 Sys  = currK.Sys;
 Exp  = currK.Exp;
 Opt  = currK.Opt;

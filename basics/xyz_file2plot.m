@@ -1,4 +1,4 @@
-function [] = xyz_file2plot(filename,path,headerlines)
+function [xyz,atom] = xyz_file2plot(filename,path,headerlines,limits)
 
 all = 1e10;
 
@@ -11,7 +11,16 @@ if nargin < 3
     headerlines = 0;
 end
 
-input = strcat(path,filename);
+if nargin < 4
+    limits = true;
+end
+
+if isempty(path)
+    input = filename;
+else
+    input = strcat(path,'\',filename);
+end
+
 data = importdata(input,'\t',all);
 
 % remove headerlines
@@ -30,7 +39,7 @@ end
 number = 1:1:numel(data);
 [connect,bond] = atomsconnectivity(atom);
 
-figure(100),clf
+figure(100),clf,hold on;
 for m = 1:length(bond)
     plot3([xyz(connect(m,1),1) xyz(connect(m,2),1)],[xyz(connect(m,1),2) xyz(connect(m,2),2)],[xyz(connect(m,1),3) xyz(connect(m,2),3)],'k-');
     hold on;
@@ -38,10 +47,15 @@ for m = 1:length(bond)
 end
 for m = 1:length(number)
     plot3(xyz(m,1),xyz(m,2),xyz(m,3),'.','Color',atomcolors(atom{m}),'MarkerSize',25)
-    text(xyz(m,1)+0.1,xyz(m,2)+0.1,xyz(m,3)+0.1,num2str(number(m)));
+%     text(xyz(m,1)+0.1,xyz(m,2)+0.1,xyz(m,3)+0.1,num2str(number(m)));
 end
 xlabel('X coord')
 ylabel('Y coord')
 zlabel('Z coord')
 
+if limits
+    xlim([min(xyz(:,1)) max(xyz(:,1))])
+    ylim([min(xyz(:,2)) max(xyz(:,2))])
+    zlim([min(xyz(:,3)) max(xyz(:,3))])
+end
 end

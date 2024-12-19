@@ -1,4 +1,4 @@
-ffunction [t,signal] = ex_CPDD2_mqr_CH3_parallel(Sys,Exp,Opt)
+function [t,signal] = ex_CPDD2_mqr_CH3_parallel(Sys,Exp,Opt)
 
 % Carr-Purcell Dynamical Decoupling n=2 simulation script
 %
@@ -403,8 +403,8 @@ parfor ori = 1:nori
     for p = 1:npoints
         sigma = zeros(size(sig0));
         for q = 1:length(Exp.addphase)
-            sig_tmp = upi2{q}*sig0*upi2r{q};                                        % pi/2 pulse
-            sig_tmp = utauh*sig_tmp*utauhr;                                             % tau/2
+            sig_tmp = upi2{q}*sig0*upi2r{q};                                % pi/2 pulse
+            sig_tmp = utauh*sig_tmp*utauhr;                                 % tau/2
             sig_tmp = (udth^(p-1))*sig_tmp*(udthr^(p-1))  ;                 % +dt (tau/2)
             sig_tmp = upi_1{q}*sig_tmp*upi_1r{q};                           % pi pulse 1
             sig_tmp = utau*sig_tmp*utaur;                                   % tau

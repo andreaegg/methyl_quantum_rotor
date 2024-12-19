@@ -2,7 +2,7 @@
 function [vt,Potential,Energy] = V3pot2vt(V3,nreigval,rotor)
 
 if nargin < 2
-    nreigval = 50;
+    nreigval = 49;
 end
 if nargin < 3
     rotor = 'CH3';
@@ -13,12 +13,13 @@ switch rotor
        B = 7.6;        % K % Moreno et al,Phys.Rev.B,1999,59,9
     case 'CD3'
        B = 3.8;        % K % Moreno et al,Phys.Rev.B,1999,59,9
+    case 'NH3'
+       B = 8.9181;
 end
 
-m = -nreigval:1:nreigval;
-n = -nreigval:1:nreigval;
+K = nreigval;
 
-[nut,E] = hindered_rotor_model(V3,m,n,B);
+[nut,E] = hindered_rotor_model(V3,K,B);
 
 vt.kHz = nut*boltzm/planck/1e3;
 vt.MHz = nut*boltzm/planck/1e6;
